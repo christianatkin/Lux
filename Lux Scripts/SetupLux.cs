@@ -12,11 +12,11 @@ public enum LuxLightingModels
 }
 
 [ExecuteInEditMode]
-[AddComponentMenu("Lux/Lux Setup")]
 public class SetupLux : MonoBehaviour {
 	
 	public float Lux_HDR_Scale = 6.0f;
 	public bool isLinear;
+    public bool isOrenNayar;
 	
 	public LuxLightingModels LuxLighting;
 	
@@ -47,11 +47,13 @@ public class SetupLux : MonoBehaviour {
 		#if UNITY_EDITOR
 		if(!Application.isPlaying) {
 			UpdateLuxIBLSettings();
+            //print(Camera.main.actualRenderingPath);
 		}
 		#endif
 		//if (MainLightReference != null) {
 		//	Shader.SetGlobalVector("Lux_MainLightDir", MainLightReference.transform.forward );
 		//}
+       
 	}
 	
 	void UpdateLuxIBLSettings () {
@@ -69,10 +71,21 @@ public class SetupLux : MonoBehaviour {
 			Shader.EnableKeyword("LUX_LIGHTING_CT");
 			Shader.DisableKeyword("LUX_LIGHTING_BP");
 		}
-		else {
+		else { 
 			Shader.DisableKeyword("LUX_LIGHTING_CT");
 			Shader.EnableKeyword("LUX_LIGHTING_BP");
 		}
+        if (isOrenNayar)
+        {
+            Shader.EnableKeyword("LUX_OREN_NAYAR_ON");
+            Shader.DisableKeyword("LUX_OREN_NAYAR_OFF");
+        }
+        else 
+        {
+            Shader.DisableKeyword("LUX_OREN_NAYAR_ON");
+            Shader.EnableKeyword("LUX_OREN_NAYAR_OFF");
+        }
+
 		// LINEAR
 		if (isLinear) {
 			Shader.DisableKeyword("LUX_GAMMA");
@@ -123,7 +136,6 @@ public class SetupLux : MonoBehaviour {
 				DestroyImmediate(PlaceHolderCube, true);
 			#endif
 		}
-
 	}
 	
 	

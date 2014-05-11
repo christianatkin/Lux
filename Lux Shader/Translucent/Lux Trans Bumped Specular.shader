@@ -117,7 +117,7 @@
 			// Specular Color
 			o.SpecularColor = spec_albedo.rgb;
 			// Roughness – gamma for BlinnPhong / linear for CookTorrence
-			o.Specular = LuxAdjustSpecular(spec_albedo.a);
+			o.Specular = LuxAdjustSpecular(spec_albedo.a); 
 
 			#include "../LuxCore/LuxLightingAmbient.cginc"
 		}

@@ -9,8 +9,8 @@ Properties {
 	_RoughnessFactor ("Roughness Factor", Range(0.0,1.0)) = 1
 
 
-	_BumpMap ("Normalmap", 2D) = "bump" {}
-	_DiffCubeIBL ("Custom Diffuse Cube", Cube) = "black" {}
+	_BumpMap ("Normalmap", 2D) = "bump" {} 
+	_DiffCubeIBL ("Custom Diffuse Cube", Cube) = "black" {} 
 	_SpecCubeIBL ("Custom Specular Cube", Cube) = "black" {}
 	
 	// _Shininess property is needed by the lightmapper - otherwise it throws errors
@@ -21,6 +21,8 @@ Properties {
 SubShader { 
 	Tags { "RenderType"="Opaque" }
 	LOD 400
+
+
 	
 	CGPROGRAM
 	#pragma surface surf LuxDirect noambient fullforwardshadows

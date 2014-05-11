@@ -2,15 +2,11 @@
 //  Modified version of CubemapMaker.js from BlackIce studio http://www.blackicegames.de/development/?site=dl&id=1
 //  Converted to C# and make it compatible for Lux
 //
-//#if UNITY_EDITOR
-
-
+#if UNITY_EDITOR
 using UnityEngine;
 using System.Collections;
-using System.Collections.Generic;
-#if UNITY_EDITOR
 using UnityEditor;
-#endif
+using System.Collections.Generic;
 using System.IO;
 
 [ExecuteInEditMode]
@@ -32,9 +28,9 @@ public class LuxEnvProbe : MonoBehaviour {
         Box
     }
 
-    //[HideInInspector]
+    [HideInInspector]
     public Cubemap DIFFCube;
-    //[HideInInspector]
+    [HideInInspector]
     public Cubemap SPECCube;
     [HideInInspector]
     public FaceSizes DiffSize = FaceSizes._16px;
@@ -67,32 +63,18 @@ public class LuxEnvProbe : MonoBehaviour {
     [HideInInspector]
     public Vector3 BoxSize = new Vector3(1f,1f,1f);
     [HideInInspector]
-    public bool ShowAssignedMeshes = true;
+    public bool ShowAssignedMeshes;
     [HideInInspector]
     public List<GameObject> AssignedMeshes;
-
-    //
-    [HideInInspector]
-    public Matrix4x4 BoxMatrix = Matrix4x4.identity;
-    [HideInInspector]
-    public Matrix4x4 TRANS_BoxMatrix = Matrix4x4.identity;
-    [HideInInspector]
-    public Matrix4x4 INV_BoxMatrix = Matrix4x4.identity;
-
-    //public Quaternion ProbeRotation;
-    public Vector3 ProbeRotation;
-
-    [HideInInspector]
-    public bool ShowBoxSize = true;
 
 	// Use this for initialization
     [HideInInspector]
     public bool init = false;
 
     //Helper
-  //  [HideInInspector]
+    [HideInInspector]
     public string DiffPath;
-  //  [HideInInspector]
+    [HideInInspector]
     public string SpecPath;
     [HideInInspector]
     public string sceneName;
@@ -108,7 +90,6 @@ public class LuxEnvProbe : MonoBehaviour {
     bool Done = false;
     int size;
 
-	#if UNITY_EDITOR
     public void PreSetup()
     {
         if (EditorApplication.currentScene != "")
@@ -118,38 +99,19 @@ public class LuxEnvProbe : MonoBehaviour {
             sceneName = string.Join("/", pathTemp.ToArray()) + "/";
         }
 
-        if(cubeName == "") {
-            if(Mode == CubeModes.Standard) {
-                cubeName = sceneName + SpecSize.ToString() + "@" + transform.position.ToString();
-            }
-            // When baking Box projected cubemaps one might pretty often change the position of the probe just a little bit...
-            else {
-                cubeName = sceneName + SpecSize.ToString() + "Box@" + GetInstanceID();
-            }
+        if(Mode == CubeModes.Standard) {
+            cubeName = sceneName + SpecSize.ToString() + "@" + transform.position.ToString();
         }
-        if (DiffPath == "") {
-            DiffPath = cubeName + "DIFF.cubemap";
+        // When baking Box projected cubemaps one might pretty often change the position of the probe just a little bit...
+        else {
+            cubeName = sceneName + SpecSize.ToString() + "Box@" + GetInstanceID();
         }
-        if (SpecPath == "") {
-            SpecPath = cubeName + "SPEC.cubemap";
-        }
+        DiffPath = cubeName + "DIFF.cubemap";
+        SpecPath = cubeName + "SPEC.cubemap";
+
+
     }
-	#endif
-
-   void Awake () {
-        //if(DiffPath != null && SpecPath !=)
-        if(DiffPath != null && SpecPath != null) {
-            // Get Cube Maps
-			#if UNITY_EDITOR
-            RetrieveCubemaps();
-			#endif
-            // Update Materials
-            SyncAssignedGameobjects();
-        }
-	}
-
-    void Start () {
-        #if UNITY_EDITOR
+	void Start () {
         PreSetup();
         //Do directory check
         if (!Directory.Exists(sceneName))
@@ -163,37 +125,11 @@ public class LuxEnvProbe : MonoBehaviour {
             DestroyImmediate(cubemap);
             DestroyImmediate(go);
             DestroyImmediate(CubeCamera);
+            RetriveCubemap();
         }
-        #endif
-        // Update Materials on entering playmode
-        SyncAssignedGameobjects();
-    }
+	
+	}
 
-    // Update is called once per frame
-    void Update () {
-        #if UNITY_EDITOR
-        if (UnityEditor.EditorApplication.isPlaying && init)
-        {
-            StartCoroutine(RenderCubemap());
-            init = false;
-        }
-        else if (Done)
-        {
-            CleanUp();
-            UnityEditor.EditorApplication.isPlaying = false;    
-        }
-        if (!UnityEditor.EditorApplication.isPlaying)
-        {
-            init = false;
-        }
-        // Update ProbeRotation
-        ProbeRotation = new Vector3(transform.eulerAngles.x, transform.eulerAngles.y, transform.eulerAngles.z);
-        // Prevent assigned Materials from loosing their settings / brute force...
-        SyncAssignedGameobjects();
-        #endif
-    }
-
-    #if UNITY_EDITOR
     void OnDrawGizmos()
     {
         Gizmos.color = new Color (0.0f, 1.0f, 1.0f, 0.75f);
@@ -202,72 +138,49 @@ public class LuxEnvProbe : MonoBehaviour {
         }
         // Mode = Boxprojection
         else {
-            BoxSize = transform.lossyScale;
             // Draw center 
             Gizmos.matrix = transform.localToWorldMatrix;
-            Gizmos.DrawCube(Vector3.zero, new Vector3(0.5f/transform.lossyScale.x,0.5f/transform.lossyScale.y,0.5f/transform.lossyScale.z));
-            if(ShowBoxSize){
-                //Draw bounding box
-                Gizmos.DrawWireCube(Vector3.zero, Vector3.one);
-            }
-            // Reset matrix
+            Gizmos.DrawCube(Vector3.zero, new Vector3(0.35f,0.35f,0.35f));
+            // Draw bounding box
+            Gizmos.DrawWireCube (Vector3.zero, BoxSize);
+            // reset matrix
             Gizmos.matrix = Matrix4x4.identity;   
         }
     }
-    #endif
 
     // Sync materials of assigned objects according to the probe’s settings (Boxprokjection only)
     public void SyncAssignedGameobjects() {
-        BoxMatrix.SetTRS(transform.position, transform.rotation, Vector3.one);
-        TRANS_BoxMatrix = BoxMatrix.transpose;
-        INV_BoxMatrix = BoxMatrix.inverse;
-
-        if(AssignedMeshes != null) {
-            // Get all objects
-            for (int i = 0; i < AssignedMeshes.Count; i++)
+        // Get all objects
+        for (int i = 0; i < AssignedMeshes.Count; i++)
+        {
+            if(AssignedMeshes[i].renderer != null)
             {
-                if(AssignedMeshes[i])
-                {
-                    if(AssignedMeshes[i].renderer != null)
+                int materials = AssignedMeshes[i].renderer.sharedMaterials.Length;
+                // Get all materials
+                for (int j = 0; j < materials; j++) {
+                    if(AssignedMeshes[i])
                     {
-                        int materials = AssignedMeshes[i].renderer.sharedMaterials.Length;
-                        // Get all materials
-                        for (int j = 0; j < materials; j++) {
-                            if (AssignedMeshes[i].renderer.sharedMaterials[j].HasProperty("_CubemapSize"))
-                            {
-                                // AssignedMeshes[i].renderer.sharedMaterials[j].SetVector("_CubemapPositionWS", new Vector4(transform.position.x, transform.position.y, transform.position.z, 0));
-                                AssignedMeshes[i].renderer.sharedMaterials[j].SetVector("_CubemapSize", new Vector4(BoxSize.x*0.5f, BoxSize.y*0.5f, BoxSize.z*0.5f, 0));
-                                AssignedMeshes[i].renderer.sharedMaterials[j].SetMatrix("_CubeMatrix_Trans", TRANS_BoxMatrix );
-                                AssignedMeshes[i].renderer.sharedMaterials[j].SetMatrix("_CubeMatrix_Inv", INV_BoxMatrix );
-                                if (SPECCube != null){
-                                    AssignedMeshes[i].renderer.sharedMaterials[j].SetTexture("_SpecCubeIBL", SPECCube);
-                                }
+                        if (AssignedMeshes[i].renderer.sharedMaterials[j].HasProperty("_CubemapPositionWS"))
+                        {
+                            AssignedMeshes[i].renderer.sharedMaterials[j].SetVector("_CubemapPositionWS", new Vector4(transform.position.x, transform.position.y, transform.position.z, 0));
+                            AssignedMeshes[i].renderer.sharedMaterials[j].SetVector("_CubemapSize", new Vector4(BoxSize.x/2f, BoxSize.y, BoxSize.z/2f, 0));
+                            if (SPECCube != null){
+                                AssignedMeshes[i].renderer.sharedMaterials[j].SetTexture("_SpecCubeIBL", SPECCube);
                             }
                         }
                     }
-                    else {
-                        Debug.Log(AssignedMeshes[i].name+" does not have a mesh renderer attached to it. It has been removed.");
-                        AssignedMeshes.RemoveAt(i);
-                        break;
-                    }
                 }
+            }
+            else {
+                Debug.Log(AssignedMeshes[i].name+" does not have a mesh renderer attached to it. It has been removed.");
+                AssignedMeshes.RemoveAt(i);
+                break;
             }
         }
     }
 
-	#if UNITY_EDITOR
     // Render Cubemaps using the built in function (pro only)
     public void RenderToCubeMap() {
-
-    //  Prepare
-        PreSetup();
-        //Do directory check
-        if (!Directory.Exists(sceneName))
-        {
-            //if it doesn't, create it
-            Directory.CreateDirectory(sceneName);
-        }
-
         var cubeCamera = new GameObject( "CubemapCamera", typeof(Camera) ) as GameObject;
     //  cubeCamera.hideFlags = HideFlags.HideInHierarchy;
         var cubeCam = cubeCamera.GetComponent("Camera") as Camera;
@@ -291,8 +204,9 @@ public class LuxEnvProbe : MonoBehaviour {
             texFor = TextureFormat.RGB24;
         }
         
-        // Irradiance cubemap
+        //  irradiance cubemap
         cubemap = new Cubemap((int)DiffSize, texFor, false);
+        
         cubeCam.RenderToCubemap(cubemap);
         
         Cubemap diffCube = cubemap;
@@ -308,7 +222,7 @@ public class LuxEnvProbe : MonoBehaviour {
         SetLinearSpace(ref serializedDiffCubemap, true);
         DIFFCube = diffCube;
 
-        // Radiance cubemap
+        // radiance cubemap
         cubemap = new Cubemap((int)SpecSize, texFor, true);
 
         cubeCam.RenderToCubemap(cubemap);
@@ -326,16 +240,14 @@ public class LuxEnvProbe : MonoBehaviour {
         SPECCube = specCube;
 
         GameObject.DestroyImmediate(cubeCamera);
-
-        //RetrieveCubemaps();
     }
-	#endif
+
 
 
 
 // ///////////////////////////////////
 
-	#if UNITY_EDITOR 
+
     public void InitRenderCube()
     {
         EditorApplication.isPlaying = true;
@@ -358,15 +270,6 @@ public class LuxEnvProbe : MonoBehaviour {
             CubeCamera.backgroundColor = ClearColor;
             CubeCamera.cullingMask = CullingMask;
 
-            // When baking for Boxprojection we might have to take the probe’s rotation into account
-            if (Mode == CubeModes.Box) {
-                //ProbeRotation = Quaternion.Inverse(transform.rotation);
-                ProbeRotation = new Vector3(transform.eulerAngles.x, transform.eulerAngles.y, transform.eulerAngles.z);
-            }
-            else {
-                ProbeRotation = new Vector3(0,0,0);   
-            }
-
             if (HDR == true)
             {
                 CubeCamera.hdr = true;
@@ -386,6 +289,7 @@ public class LuxEnvProbe : MonoBehaviour {
         Resources.UnloadUnusedAssets();
         AssetDatabase.Refresh();
         yield return new WaitForEndOfFrame();
+
     }
 
     IEnumerator InitializeStartSequence()
@@ -432,8 +336,6 @@ public class LuxEnvProbe : MonoBehaviour {
             SerializedObject serializedCubemap = new SerializedObject(diffCube);
             SetLinearSpace(ref serializedCubemap, true);
             DIFFCube = diffCube;
-            //
-            DiffPath = finalDiffPath;
         }
         else
         {
@@ -452,8 +354,6 @@ public class LuxEnvProbe : MonoBehaviour {
             SerializedObject serializedCubemap = new SerializedObject(specCube);
             SetLinearSpace(ref serializedCubemap, true);
             SPECCube = specCube;
-            //
-            SpecPath = finalSpecPath;
         }
         yield return StartCoroutine(Finished());
     }
@@ -495,36 +395,52 @@ public class LuxEnvProbe : MonoBehaviour {
         Quaternion result;
             switch(face)
 	    {
-        //  Rotate camera according to probe rotation
 		    case CubemapFace.PositiveX:
-			    result = Quaternion.Euler(0 + ProbeRotation.x, 90 + ProbeRotation.y, 0 + ProbeRotation.z);
+			    result = Quaternion.Euler(0,90,0);
 		    break;
 		    case CubemapFace.NegativeX:
-			    result = Quaternion.Euler(0 + ProbeRotation.x, -90 + ProbeRotation.y, 0 + ProbeRotation.z);
+			    result = Quaternion.Euler(0,-90,0);
 		    break;
 		    case CubemapFace.PositiveY:
-			    result = Quaternion.Euler(-90 + ProbeRotation.x, 0 + ProbeRotation.y, 0 + ProbeRotation.z);
+			    result = Quaternion.Euler(-90,0,0);
 		    break;
 		    case CubemapFace.NegativeY:
-			    result = Quaternion.Euler(90 + ProbeRotation.x, 0 + ProbeRotation.y, 0 + ProbeRotation.z);
+			    result = Quaternion.Euler(90,0,0);
 		    break;
 		    case CubemapFace.NegativeZ:
-			    result = Quaternion.Euler(0 + ProbeRotation.x, 180 + ProbeRotation.y, 0 + ProbeRotation.z);
+			    result = Quaternion.Euler(0,180,0);
 		    break;
 		    default:
-			    //result = Quaternion.identity;
-                result = Quaternion.Euler(0 + ProbeRotation.x, 0 + ProbeRotation.y, 0 + ProbeRotation.z);
+			    result = Quaternion.identity;
 		    break;
 	    }
 	    return result;
     }
 
-	IEnumerator Finished()
+	// Update is called once per frame
+	void Update () {
+
+        if (UnityEditor.EditorApplication.isPlaying && init)
+        {
+            StartCoroutine(RenderCubemap());
+            init = false;
+        }
+        else if (Done)
+        {
+            CleanUp();
+            UnityEditor.EditorApplication.isPlaying = false;    
+        }
+        if (!UnityEditor.EditorApplication.isPlaying)
+        {
+            init = false;
+        }
+	}
+
+    IEnumerator Finished()
     {
         Done = true;
         yield return null;
     }
-	#endif	
 
     // Code taken from Jon-Martin.com
     static Texture2D Scale(Texture2D source ,int targetWidth ,int targetHeight )
@@ -542,7 +458,6 @@ public class LuxEnvProbe : MonoBehaviour {
         return result;
     }
 
-	#if UNITY_EDITOR
     void SetLinearSpace(ref SerializedObject obj, bool linear)
     {
         if (obj == null) return;
@@ -568,14 +483,10 @@ public class LuxEnvProbe : MonoBehaviour {
         init = false;
     }
 
-    public void RetrieveCubemaps()
+    public void RetriveCubemap()
     {
-        if(DiffPath != null) {
-            DIFFCube = AssetDatabase.LoadAssetAtPath(DiffPath, (typeof(Cubemap))) as Cubemap;
-        }
-        if (SpecPath != null) {
-            SPECCube = AssetDatabase.LoadAssetAtPath(SpecPath, (typeof(Cubemap))) as Cubemap;
-        }
+        DIFFCube = AssetDatabase.LoadAssetAtPath(DiffPath, (typeof(Cubemap))) as Cubemap;
+        SPECCube = AssetDatabase.LoadAssetAtPath(SpecPath, (typeof(Cubemap))) as Cubemap;
     }
-	#endif
 }
+#endif

@@ -16,9 +16,9 @@ struct SurfaceOutputLux {
 	half DeferredFresnel;
 };
 
-
 // for Cook Torrence spec or roughness has to be in linear space
 half LuxAdjustSpecular(half spec) {
+
 	#if defined(LUX_LIGHTING_CT)
 		return clamp(pow(spec, 1/2.2), 0.0, 0.996);
 	#else
@@ -26,16 +26,19 @@ half LuxAdjustSpecular(half spec) {
 	#endif
 }
 
-
+ 
 /////////////////////////////// deferred lighting / uses faked fresnel
 
-inline fixed4 LightingLuxDirect_PrePass (SurfaceOutputLux s, half4 light)
+inline fixed4 LightingLuxDirect_PrePass (SurfaceOutputLux s,half4 light)
 {
+
+
 	// light.a is "compressed" to fit into the 0-1 range using log2(x + 1) which is the best compromise i have found
 	fixed spec = exp2(light.a) - 1;
-	fixed4 c;
+
 //	Diffuse
-	c.rgb = s.Albedo * light.rgb;
+	fixed4 c;
+	c.rgb = s.Albedo.rgb * light.rgb;
 //	Specular
 	//s.DeferredFresnel based on dot N V (faked fresnel as it should be dot H V)
 	#if !defined (LUX_DIFFUSE)
@@ -65,30 +68,41 @@ float4 LightingLuxDirect (SurfaceOutputLux s, fixed3 lightDir, half3 viewDir, fi
 	// dotNL has to have max
 	float dotNL = max (0, dot (s.Normal, lightDir));
 	float dotNH = max (0, dot (s.Normal, h));
-	
+
+	//float NdotV = max(0, dot(s.Normal, normalize(viewDir.xyz)));
+
+	float alpha;
+	float alpha2; 
+
+
 	#if !defined (LUX_LIGHTING_BP) && !defined (LUX_LIGHTING_CT)
 		#define LUX_LIGHTING_BP
 	#endif
 
-//	////////////////////////////////////////////////////////////
+//	//////////////////////////////////////////////////////////// 
 //	Blinn Phong	
 	#if defined (LUX_LIGHTING_BP)
 	// bring specPower into a range of 0.25 – 2048
 	float specPower = exp2(10 * s.Specular + 1) - 1.75;
 
-//	Normalized Lighting Model:
+//	Normalized Lighting Model: 
 	// L = (c_diff * dotNL + F_Schlick(c_spec, l_c, h) * ( (spec + 2)/8) * dotNH˄spec * dotNL) * c_light
 	
 //	Specular: Phong lobe normal distribution function
 	//float spec = ((specPower + 2.0) * 0.125 ) * pow(dotNH, specPower) * dotNL; // would be the correct term
 	// we use late * dotNL to get rid of any artifacts on the backsides
 	float spec = specPower * 0.125 * pow(dotNH, specPower);
-
+	 
 //	Visibility: Schlick-Smith
-	float alpha = 2.0 / sqrt( Pi * (specPower + 2) );
+	alpha = 2.0 / sqrt( Pi * (specPower + 2) );
 	float visibility = 1.0 / ( (dotNL * (1 - alpha) + alpha) * ( saturate(dot(s.Normal, viewDir)) * (1 - alpha) + alpha) ); 
 	spec *= visibility;
 	#endif
+
+	//	Please note: s.Specular must be linear
+	alpha = (1.0 - s.Specular); // alpha is roughness
+	alpha *= alpha;
+	alpha2 = alpha * alpha; 
 	
 //	////////////////////////////////////////////////////////////
 //	Cook Torrrence like
@@ -96,11 +110,6 @@ float4 LightingLuxDirect (SurfaceOutputLux s, fixed3 lightDir, half3 viewDir, fi
 
 	#if defined (LUX_LIGHTING_CT)
 	float dotNV = max(0, dot(s.Normal, normalize(viewDir) ) );
-
-//	Please note: s.Specular must be linear
-	float alpha = (1.0 - s.Specular); // alpha is roughness
-	alpha *= alpha;
-	float alpha2 = alpha * alpha;
 
 //	Specular Normal Distribution Function: GGX Trowbridge Reitz
 	float denominator = (dotNH * dotNH) * (alpha2 - 1) + 1;
@@ -119,10 +128,45 @@ float4 LightingLuxDirect (SurfaceOutputLux s, fixed3 lightDir, half3 viewDir, fi
 	// from here on we use fresnel instead of spec as it is fixed3 = color
 	fresnel *= spec;
 	
-// Final Composition
+	fixed3 diffuseOren = 1;
+
+	//// Oren Nayar
+	#if defined (LUX_OREN_NAYAR_ON)
+
+		alpha = (1.0 - spec) * _RoughnessFac; // alpha is roughness
+		alpha *= alpha;
+		alpha2 = alpha * alpha; 
+		float2 oren_nayar_fraction = alpha2/(alpha2 + float2(0.33,0.09));
+		float2 oren_nayar = float2(1, 0) + float2(-0.5, 0.45) * oren_nayar_fraction;
+ 
+		//components
+		//half cos_nl = saturate(dot(s.Normal, lightDir)); //Using main NL here?
+		//half cos_nv = saturate(dot(s.Normal, viewDir)); //Using main NV here?
+		//half oren_nayar_s = saturate(dot(lightDir, viewDir)) - cos_nl * cos_nv;
+		//oren_nayar_s /= lerp(max(dotNL, cos_nv), 1, step(oren_nayar_s, 0));
+
+		//Theta and phi
+		float2 cos_theta = saturate(float2(dot(s.Normal,lightDir),dot(s.Normal,viewDir))); 
+		float2 cos_theta2 = cos_theta * cos_theta;
+		float sin_theta = sqrt((1-cos_theta2.x)*(1-cos_theta2.y));
+		float3 light_plane = normalize(lightDir - cos_theta.x*s.Normal);
+		float3 view_plane = normalize(viewDir - cos_theta.y*s.Normal);
+		float cos_phi = saturate(dot(light_plane, view_plane));
+
+		float diffuse_oren_nayar = cos_phi * sin_theta / max(cos_theta.x, cos_theta.y);
+ 
+		diffuseOren = saturate(cos_theta.x * (oren_nayar.x + oren_nayar.y * diffuse_oren_nayar));
+	#endif
+	#if defined (LUX_OREN_NAYAR_OFF) 
+			diffuseOren = 1;
+	#endif
+
+	// Final Composition
 	fixed4 c;
+
 	// we only use fresnel here / and apply late dotNL
-	c.rgb = (s.Albedo + fresnel) * _LightColor0.rgb * dotNL * (atten * 2);
+
+	c.rgb = (s.Albedo + fresnel) * _LightColor0.rgb * dotNL * (atten * 2 * diffuseOren);
 	c.a = s.Alpha; // + _LightColor0.a * fresnel * atten;
 	return c;
 }
@@ -141,18 +185,21 @@ inline half4 LightingLuxDirect_DirLightmap (SurfaceOutputLux s, fixed4 color, fi
 	
 	float dotNL = max (0, dot (s.Normal, lightDir));
 	float dotNH = max (0, dot (s.Normal, h));
-	
+
+	float alpha;
+	float alpha2;
+	 
 	
 	#if !defined (LUX_LIGHTING_BP) && !defined (LUX_LIGHTING_CT)
 		#define LUX_LIGHTING_BP
 	#endif
 	
-//	////////////////////////////////////////////////////////////
+//	//////////////////////////////////////////////////////////// 
 //	Blinn Phong	
 	#if defined (LUX_LIGHTING_BP)
-	// bring specPower into a range of 0.25 – 2048
+	// bring specPower into a range of 0.25 – 2048 
 	float specPower = exp2(10 * s.Specular + 1) - 1.75;
-
+	 
 //	Normalized Lighting Model:
 	// L = (c_diff * dotNL + F_Schlick(c_spec, l_c, h) * ( (spec + 2)/8) * dotNH˄spec * dotNL) * c_light
 	
@@ -162,10 +209,15 @@ inline half4 LightingLuxDirect_DirLightmap (SurfaceOutputLux s, fixed4 color, fi
 	float spec = specPower * 0.125 * pow(dotNH, specPower);
 
 //	Visibility: Schlick-Smith
-	float alpha = 2.0 / sqrt( Pi * (specPower + 2) );
+	alpha = 2.0 / sqrt( Pi * (specPower + 2) );
 	float visibility = 1.0 / ( (dotNL * (1 - alpha) + alpha) * ( saturate(dot(s.Normal, viewDir)) * (1 - alpha) + alpha) ); 
-	spec *= visibility;
+	spec *= visibility; 
 	#endif	
+
+
+	alpha = (1.0 - s.Specular); // alpha is roughness
+	alpha *= alpha;
+	alpha2 = alpha * alpha;
 	
 //	////////////////////////////////////////////////////////////
 //	Cook Torrrence like
@@ -175,9 +227,7 @@ inline half4 LightingLuxDirect_DirLightmap (SurfaceOutputLux s, fixed4 color, fi
 	float dotNV = max(0, dot(s.Normal, normalize(viewDir) ) );
 
 //	Please note: s.Specular must be linear
-	float alpha = (1.0 - s.Specular); // alpha is roughness
-	alpha *= alpha;
-	float alpha2 = alpha * alpha;
+
 		
 //	Specular Normal Distribution Function: GGX Trowbridge Reitz
 	float denominator = (dotNH * dotNH) * (alpha2 - 1) + 1;

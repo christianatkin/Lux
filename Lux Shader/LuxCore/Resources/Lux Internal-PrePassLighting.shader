@@ -47,7 +47,6 @@ CBUFFER_END
 float4x4 _LightMatrix0;
 sampler2D _LightTextureB0;
 
-
 #if defined (POINT_COOKIE)
 samplerCUBE _LightTexture0;
 #else
@@ -191,7 +190,7 @@ half4 CalculateLight (v2f i)
 	float3 wpos = mul (_CameraToWorld, vpos).xyz;
 
 	float fadeDist = ComputeFadeDistance(wpos, vpos.z);
-	
+
 	#if defined (SPOT)	
 	float3 tolight = _LightPos.xyz - wpos;
 	half3 lightDir = normalize (tolight);
@@ -237,7 +236,7 @@ half4 CalculateLight (v2f i)
 	#endif //POINT || POINT_COOKIE
 
 //	////////////////////////////////////////////////////////////
-//	Lux Lighting
+//	Lux Lighting 
 	#define Pi 3.14159265358979323846
 	// attention: sign of viewDir
 	float3 viewDir = normalize(wpos-_WorldSpaceCameraPos);
@@ -245,36 +244,44 @@ half4 CalculateLight (v2f i)
 	float dotNH = max (0, dot (normal, h)); // we do have to max dotNH to make it work on dx11
 	float dotNL = max (0, dot (lightDir, normal));
 
+	float diffuseOren;
+
+	float alpha;
+	float alpha2;
+
+
+	 
 //	////////////////////////////////////////////////////////////
 //	Blinn Phong	
 	#if defined (LUX_LIGHTING_BP)
 	// We chosed a range of 0.25-2048
 	float specPower = exp2(10 * nspec.a + 1) - 1.75;
 //	Specular BRDF: normalized Blinn Phong distribution
-	// float spec = (specPower + 2.0) * 0.125 * pow(dotNH, specPower); // * dotNL;
+	// float spec = (specPower + 2.0) * 0.125 * pow(dotNH, specPower); // * dotNL; 
 	// original lighting function produces specular highlights even at roughness = 1, so we drop the "+2"
 	float spec = specPower * 0.125 * pow(dotNH, specPower); // * dotNL;
 	// we multiply by dotNL in Final Composition to get rid of artifacts added by the visibility term in conjunction with lightprobes/lightmaps
 
 //	Visibility: Schlick-Smith
-	float alpha = 2.0 / sqrt( Pi * (specPower + 2) );
+	alpha = 2.0 / sqrt( Pi * (specPower + 2) );
 	// attention: sign of viefDir has to be flipped!
 	float visibility = 1.0 / ( (dotNL * (1 - alpha) + alpha) * ( saturate(dot(normal, -viewDir)) * (1 - alpha) + alpha) );
 	spec *= visibility; // that may produce artifacts when using lightprobes/lightmaps so we apply "late" * dotNL 
 	#endif
+
+		//	Please note: s.Specular must be linear
+
+	alpha = (1 - nspec.a); // alpha is roughness
+	alpha *= alpha;
+	alpha2 = alpha * alpha;
 
 //	////////////////////////////////////////////////////////////
 //	Cook Torrrence like
 //	from The Order 1886 // http://blog.selfshadow.com/publications/s2013-shading-course/rad/s2013_pbs_rad_notes.pdf
 
 	#if defined (LUX_LIGHTING_CT)
-	// attention: sign of viewDir!
+	// attention: sign of viewDir! 
 	float dotNV = max(0, dot(normal, -viewDir));
-
-//	Please note: s.Specular must be linear
-	float alpha = (1 - nspec.a); // alpha is roughness
-	alpha *= alpha;
-	float alpha2 = alpha * alpha;
 
 //	Specular Normal Distribution Function: GGX Trowbridge Reitz
 	float denominator = (dotNH * dotNH) * (alpha2 - 1) + 1;
@@ -284,19 +291,54 @@ half4 CalculateLight (v2f i)
 //	Geometric Shadowing: Smith
 	float V_ONE = ( dotNL + sqrt(alpha2 + (1 - alpha2) * dotNL * dotNL  )  );
 	float V_TWO = ( dotNV + sqrt(alpha2 + (1 - alpha2) * dotNV * dotNV  )  );
-	spec /= V_ONE * V_TWO;
+	spec /= V_ONE * V_TWO; 
 	#endif
 
+		//// Oren Nayar
+	#if defined (LUX_OREN_NAYAR_ON) 
+	//half roughness = (1 - nspec.a);
+	//half roughness2 = roughness * roughness;
+		//	Please note: s.Specular must be linear
+
+		alpha = (1 - nspec.a); // alpha is roughness
+		alpha *= alpha;
+		alpha2 = alpha * alpha;
+		float2 oren_nayar_fraction = alpha2/(alpha2 + float2(0.33,0.09)); 
+		float2 oren_nayar = float2(1, 0) + float2(-0.5, 0.45) * oren_nayar_fraction;
+ 
+
+		////components
+		//half cos_nl = saturate(dot(normal, lightDir)); //Using main NL here?
+		//half cos_nv = saturate(dot(normal, viewDir)); //Using main NV here? 
+		//half oren_nayar_s = saturate(dot(lightDir, viewDir)) - cos_nl * cos_nv;
+		//oren_nayar_s /= lerp(max(cos_nl, cos_nv), 1, step(oren_nayar_s, 0));
+
+		//Theta and phi
+		float2 cos_theta = saturate(float2(dot(normal,lightDir),dot(normal,viewDir)));
+		float2 cos_theta2 = cos_theta * cos_theta;
+		float sin_theta = sqrt((1-cos_theta2.x)*(1-cos_theta2.y));
+		float3 light_plane = normalize(lightDir - cos_theta.x*normal);
+		float3 view_plane = normalize(viewDir - cos_theta.y*normal);
+		float cos_phi = saturate(dot(light_plane, view_plane));
+ 
+		//composition
+ 
+		float diffuse_oren_nayar = cos_phi * sin_theta / max(cos_theta.x, cos_theta.y);
+ 
+		diffuseOren = saturate(cos_theta.x * (oren_nayar.x + oren_nayar.y * diffuse_oren_nayar));
+ 
+		//composition
+		//diffuseMod = atten * cos_nl * (oren_nayar.x + atten * oren_nayar.y + oren_nayar.z * oren_nayar_s);
+	#endif
+	#if defined (LUX_OREN_NAYAR_OFF)
+		diffuseOren = 1;
+	#endif
 
 //	Fresnel: Schlick
 	// unfortunately fresnel does not work in deferred as we can’t access specularColorRGB
 	// fresnel might be applied in "LightingLuxDirect_PrePass" if all needed params were passed in the surface function
 	
-//	Final composition
-	// Here we apply late "* dotNL" to eliminate all possible artifacts
-	spec *= saturate(atten) * dotNL;
-	half4 res;
-	res.xyz = _LightColor.rgb * (dotNL * atten);
+
 	
 	// calculate SpecularColor: here we only use luminance
 	// see: http://www.realtimerendering.com/blog/deferred-lighting-approaches/
@@ -304,6 +346,15 @@ half4 CalculateLight (v2f i)
 //	half lightluminance = dot(_LightColor.rgb, luminanceSensivity);
 	// compress SpecularColor
 //	res.w = log2(spec * lightluminance + 1);
+
+	half4 res;
+
+	res.xyz = _LightColor.rgb * (dotNL * (atten * diffuseOren));
+
+	// Final composition
+	// Here we apply late "* dotNL" to eliminate all possible artifacts
+	spec *= saturate(atten) * dotNL;
+
 	res.w = log2(spec + 1);
 	float fade = fadeDist * unity_LightmapFade.z + unity_LightmapFade.w;
 	res *= saturate(1.0 - fade);
@@ -325,6 +376,7 @@ CGPROGRAM
 #pragma multi_compile_lightpass
 
 #pragma multi_compile LUX_LIGHTING_CT LUX_LIGHTING_BP
+#pragma multi_compile LUX_OREN_NAYAR_ON LUX_OREN_NAYAR_OFF 
 
 fixed4 frag (v2f i) : COLOR
 {
@@ -348,6 +400,7 @@ CGPROGRAM
 #pragma multi_compile_lightpass
 
 #pragma multi_compile LUX_LIGHTING_CT LUX_LIGHTING_BP
+#pragma multi_compile LUX_OREN_NAYAR_ON LUX_OREN_NAYAR_OFF 
 
 fixed4 frag (v2f i) : COLOR
 {
@@ -371,6 +424,7 @@ CGPROGRAM
 #pragma multi_compile_lightpass
 
 #pragma multi_compile LUX_LIGHTING_BP LUX_LIGHTING_CT
+#pragma multi_compile LUX_OREN_NAYAR_ON LUX_OREN_NAYAR_OFF 
 
 fixed4 frag (v2f i) : COLOR
 {

@@ -6,14 +6,14 @@
 		
 		#ifdef SPECCUBE_ON
 			float NdotV = max(0, dot(o.Normal, normalize(IN.viewDir.xyz)));
-		#endif
+		#endif 
 
 		// Fake Fresnel effect using N dot V / only needed by deferred lighting	
 		#if defined(UNITY_PASS_PREPASSFINAL) && defined (SPECCUBE_ON)
 			#ifdef NO_DEFERREDFRESNEL
 				o.DeferredFresnel = 0;
 			#else
-				o.DeferredFresnel = exp2(-OneOnLN2_x6 * NdotV);
+				o.DeferredFresnel = exp2(-OneOnLN2_x6 * NdotV); 
 			#endif
 		#endif
 
@@ -55,8 +55,10 @@
 			#if defined (LUX_LIGHTMAP_OFF)
 //		otherwise add ambient light from Spherical Harmonics
 				o.Emission = ShadeSH9 ( float4(worldNormal.xyz, 1.0)) * o.Albedo;
-			#endif
+			#endif 
 		#endif
+
+
 		
 //		add specular IBL		
 		#ifdef SPECCUBE_ON
@@ -108,5 +110,7 @@
 		#ifdef LUX_METALNESS
 			o.Emission *= spec_albedo.g;
 		#endif
+
+
 
 #endif

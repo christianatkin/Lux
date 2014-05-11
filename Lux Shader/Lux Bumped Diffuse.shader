@@ -18,7 +18,7 @@ SubShader {
 	#pragma target 3.0
 	// we use the default lighting functions
 	
-	#pragma multi_compile LUX_LINEAR LUX_GAMMA
+	#pragma multi_compile LUX_LINEAR LUX_GAMMA 
 	#pragma multi_compile DIFFCUBE_ON DIFFCUBE_OFF
 	#pragma multi_compile LUX_AO_OFF LUX_AO_ON
 
