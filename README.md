@@ -1,4 +1,8 @@
 Lux – open source physically based shader framework for unity
+
+Originally created from larsbeltram69/Lux - currently attempting to implement Oren Nayar diffuse
+
+I will try to implement tools by others at their consent
 ===
 
 <img src="http://gdurl.com/OHDW">
