@@ -6,7 +6,7 @@ using System.Linq;
 public class LuxMaterialInspector : MaterialEditor
 {
 
-    private bool asForward;
+    private bool orenNayarCheck;
 
     public override void OnInspectorGUI()
     {
@@ -59,34 +59,28 @@ public class LuxMaterialInspector : MaterialEditor
         }
 
         // Oren Nayar
-        if (targetMat.HasProperty("_RoughnessFac") && Component.FindObjectOfType<SetupLux>().isOrenNayar == true)
+        //if (targetMat.HasProperty("_OverallRoughness") && !Component.FindObjectOfType<SetupLux>().isOrenNayarGlobal)
+        //{
+        //    if(Camera.main.renderingPath != RenderingPath.DeferredLighting)
+        //    {
+        //        EditorGUILayout.BeginHorizontal();
+        //        orenNayarCheck = EditorGUILayout.Toggle("", orenNayarCheck, GUILayout.Width(14));
+        //        EditorGUILayout.LabelField("Enable Oren-Nayar Diffuse");
+        //        EditorGUILayout.EndHorizontal();
+        //        orenNayarDiffuse = orenNayarCheck;
+        //    }
+        //}
+        //if (Component.FindObjectOfType<SetupLux>().isOrenNayarGlobal)
+        //{
+        //    EditorGUILayout.BeginHorizontal();
+        //    EditorGUILayout.LabelField("Check SetupLux - Oren Nayar is global");
+        //    EditorGUILayout.EndHorizontal();
+        //    orenNayarDiffuse = true;
+        //}
+        if (targetMat.HasProperty("_OverallRoughness") && !targetMat.HasProperty("_Detail"))
         {
-
-            EditorGUILayout.BeginHorizontal();
-            orenNayarDiffuse = EditorGUILayout.Toggle("", orenNayarDiffuse, GUILayout.Width(14));
-            EditorGUILayout.LabelField("Enable Oren-Nayar Diffuse");
-            EditorGUILayout.EndHorizontal();
-            if (orenNayarDiffuse)
-            {
-                RangeProperty("_RoughnessFac", "Roughness Factor", 0.0f, 1.0f);
-            }
-            if (Camera.main.renderingPath == RenderingPath.DeferredLighting)
-            {
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField("Per mat roughness tweak wont work on deferred lit objects");
-                EditorGUILayout.EndHorizontal();
-            }
-
-        }
-        if(Component.FindObjectOfType<SetupLux>().isOrenNayar == false)
-        {
-
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Check SetupLux for Oren Nayar Diffuse");
-            EditorGUILayout.EndHorizontal();
-            orenNayarDiffuse = false;
-
-
+            RangeProperty("_DiffuseRoughness", "Diffuse Roughness", 0.0f, 1.0f);
+            RangeProperty("_OverallRoughness", "Overall Roughness", 0.0f, 1.0f);
         }
 
         if (EditorGUI.EndChangeCheck())

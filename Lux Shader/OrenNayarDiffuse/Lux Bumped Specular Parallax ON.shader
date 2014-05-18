@@ -1,4 +1,4 @@
-﻿Shader "Lux/Parallax/Bumped Specular Parallax" {
+﻿Shader "Lux/OrenNayar/Parallax/Bumped Specular Parallax" {
 
 Properties {
 	_Color ("Diffuse Color", Color) = (1,1,1,1)

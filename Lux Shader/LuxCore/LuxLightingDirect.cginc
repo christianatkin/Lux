@@ -75,7 +75,7 @@ float4 LightingLuxDirect (SurfaceOutputLux s, fixed3 lightDir, half3 viewDir, fi
 	float alpha2; 
 
 
-	#if !defined (LUX_LIGHTING_BP) && !defined (LUX_LIGHTING_CT)
+	#if !defined (LUX_LIGHTING_BP) && !defined (LUX_LIGHTING_CT) && !defined (LUX_DIRECT)
 		#define LUX_LIGHTING_BP
 	#endif
 
@@ -128,12 +128,12 @@ float4 LightingLuxDirect (SurfaceOutputLux s, fixed3 lightDir, half3 viewDir, fi
 	// from here on we use fresnel instead of spec as it is fixed3 = color
 	fresnel *= spec;
 	
-	fixed3 diffuseOren = 1;
+	float diffuseOren = 1;
 
 	//// Oren Nayar
 	#if defined (LUX_OREN_NAYAR_ON)
 
-		alpha = (1.0 - spec) * _RoughnessFac; // alpha is roughness
+		alpha = (1.0 - spec); // alpha is roughness
 		alpha *= alpha;
 		alpha2 = alpha * alpha; 
 		float2 oren_nayar_fraction = alpha2/(alpha2 + float2(0.33,0.09));
@@ -251,6 +251,41 @@ inline half4 LightingLuxDirect_DirLightmap (SurfaceOutputLux s, fixed4 color, fi
 	fresnel *= spec;
 	// or spec for deferred (no fresnel term applied)
 
+	float diffuseOren = 1;
+
+	//// Oren Nayar
+	#if defined (LUX_OREN_NAYAR_ON)
+
+		alpha = (1.0 - spec); // alpha is roughness
+		alpha *= alpha;
+		alpha2 = alpha * alpha; 
+		float2 oren_nayar_fraction = alpha2/(alpha2 + float2(0.33,0.09));
+		float2 oren_nayar = float2(1, 0) + float2(-0.5, 0.45) * oren_nayar_fraction;
+ 
+		//components
+		//half cos_nl = saturate(dot(s.Normal, lightDir)); //Using main NL here?
+		//half cos_nv = saturate(dot(s.Normal, viewDir)); //Using main NV here?
+		//half oren_nayar_s = saturate(dot(lightDir, viewDir)) - cos_nl * cos_nv;
+		//oren_nayar_s /= lerp(max(dotNL, cos_nv), 1, step(oren_nayar_s, 0));
+
+		//Theta and phi
+		float2 cos_theta = saturate(float2(dot(s.Normal,lightDir),dot(s.Normal,viewDir))); 
+		float2 cos_theta2 = cos_theta * cos_theta;
+		float sin_theta = sqrt((1-cos_theta2.x)*(1-cos_theta2.y));
+		float3 light_plane = normalize(lightDir - cos_theta.x*s.Normal);
+		float3 view_plane = normalize(viewDir - cos_theta.y*s.Normal);
+		float cos_phi = saturate(dot(light_plane, view_plane));
+
+		float diffuse_oren_nayar = cos_phi * sin_theta / max(cos_theta.x, cos_theta.y);
+ 
+		diffuseOren = saturate(cos_theta.x * (oren_nayar.x + oren_nayar.y * diffuse_oren_nayar));
+	#endif
+	#if defined (LUX_OREN_NAYAR_OFF) 
+			diffuseOren = 1;
+	#endif
+
+
+
 	// specColor used outside in the forward path, compiled out in prepass
 	// here we drop spec and go with fresnel instead as it is float3
 //	forward
@@ -260,6 +295,6 @@ inline half4 LightingLuxDirect_DirLightmap (SurfaceOutputLux s, fixed4 color, fi
 	// spec from the alpha component is used to calculate specular
 	// in the Lighting*_Prepass function, it's not used in forward
 	// we have to compress spec like we do in the "Intrenal-PrepassLighting" shader
-	return half4(lm, log2(spec + 1));
+	return half4(lm, log2(spec + 1) * diffuseOren);
 }
 #endif

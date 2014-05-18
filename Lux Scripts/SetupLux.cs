@@ -16,15 +16,15 @@ public class SetupLux : MonoBehaviour {
 	
 	public float Lux_HDR_Scale = 6.0f;
 	public bool isLinear;
-    public bool isOrenNayar;
-	
+    public bool isOrenNayarDiffuse;
+
 	public LuxLightingModels LuxLighting;
 	
 	// IBL
 	public float Lux_IBL_DiffuseExposure = 1.0f;
 	private float DiffuseExposure;
 	public float Lux_IBL_SpecularExposure = 1.0f;
-	private float SpecularExposure;
+	private float SpecularExposure; 
 	public Cubemap diffuseCube = null;
 	public bool diffuseIsHDR;
 	public Cubemap specularCube = null;
@@ -46,9 +46,12 @@ public class SetupLux : MonoBehaviour {
 	void Update () {
 		#if UNITY_EDITOR
 		if(!Application.isPlaying) {
+
 			UpdateLuxIBLSettings();
             //print(Camera.main.actualRenderingPath);
 		}
+
+
 		#endif
 		//if (MainLightReference != null) {
 		//	Shader.SetGlobalVector("Lux_MainLightDir", MainLightReference.transform.forward );
@@ -74,8 +77,27 @@ public class SetupLux : MonoBehaviour {
 		else { 
 			Shader.DisableKeyword("LUX_LIGHTING_CT");
 			Shader.EnableKeyword("LUX_LIGHTING_BP");
-		}
-        if (isOrenNayar)
+		} 
+        //if (isOrenNayarGlobal && Camera.main.renderingPath == RenderingPath.DeferredLighting)
+        //{
+        //    Shader.EnableKeyword("LUX_OREN_NAYAR_ON");
+        //    Shader.DisableKeyword("LUX_OREN_NAYAR_OFF");
+        //}
+        //if (!isOrenNayarGlobal && Camera.main.renderingPath == RenderingPath.DeferredLighting)
+        //{
+        //    Shader.DisableKeyword("LUX_OREN_NAYAR_ON");
+        //    Shader.EnableKeyword("LUX_OREN_NAYAR_OFF");
+        //}
+        //if (isOrenNayarGlobal && Camera.main.renderingPath != RenderingPath.DeferredLighting)
+        //{
+        //    Shader.EnableKeyword("LUX_OREN_NAYAR_ON");
+        //    Shader.DisableKeyword("LUX_OREN_NAYAR_OFF");
+        //}
+        //if (!isOrenNayarGlobal && Camera.main.renderingPath != RenderingPath.DeferredLighting)
+        //{
+            
+        //}
+        if (isOrenNayarDiffuse)
         {
             Shader.EnableKeyword("LUX_OREN_NAYAR_ON");
             Shader.DisableKeyword("LUX_OREN_NAYAR_OFF");
